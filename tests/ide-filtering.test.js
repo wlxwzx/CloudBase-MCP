@@ -158,50 +158,45 @@ test('downloadTemplate tool validates IDE parameter correctly', async () => {
   }
 }, 90000);
 
-test('downloadTemplate tool maintains backward compatibility', async () => {
+test('downloadTemplate tool requires IDE parameter when not detected', async () => {
   let transport = null;
   let client = null;
+  const originalEnv = process.env.INTEGRATION_IDE;
   
   try {
-    console.log('Testing downloadTemplate backward compatibility...');
+    console.log('Testing downloadTemplate IDE parameter requirement...');
     
-    // Create client
+    // Use the CJS CLI for integration testing
+    // Remove INTEGRATION_IDE from env to test error case
+    const testEnv = { ...process.env };
+    delete testEnv.INTEGRATION_IDE;
+    
+    const serverPath = join(__dirname, '../mcp/dist/cli.cjs');
+    
+    // Test 1: Without IDE parameter and without INTEGRATION_IDE env var (should return error)
+    console.log('Test 1: Testing IDE parameter requirement (no INTEGRATION_IDE env var)...');
+    
     client = new Client({
-      name: "test-client-backward-compat",
+      name: "test-client-ide-required",
       version: "1.0.0",
     }, {
       capabilities: {}
     });
 
-    // Use the CJS CLI for integration testing
-    const serverPath = join(__dirname, '../mcp/dist/cli.cjs');
     transport = new StdioClientTransport({
       command: 'node',
       args: [serverPath],
-      env: { ...process.env }
+      env: testEnv
     });
 
-    // Connect client to server
     await client.connect(transport);
     await delay(3000);
-
-    console.log('Testing IDE parameter requirement...');
     
-    // Test without IDE parameter and without INTEGRATION_IDE env var (should return error)
     try {
-      // Remove INTEGRATION_IDE from env if it exists
-      const originalEnv = process.env.INTEGRATION_IDE;
-      delete process.env.INTEGRATION_IDE;
-      
       const result = await client.callTool('downloadTemplate', {
         template: 'rules',
         overwrite: false
       });
-      
-      // Restore original env
-      if (originalEnv) {
-        process.env.INTEGRATION_IDE = originalEnv;
-      }
       
       // The tool should return an error message asking for IDE parameter
       expect(result.content).toBeDefined();
@@ -211,10 +206,34 @@ test('downloadTemplate tool maintains backward compatibility', async () => {
       
     } catch (error) {
       // This is acceptable - the tool might fail for other reasons (like network)
-      console.log('✅ Tool call completed (may have failed for expected reasons):', error.message);
+      console.log('⚠️ Tool call completed (may have failed for expected reasons):', error.message);
     }
     
-    // Test with explicit IDE parameter (should work)
+    // Clean up first connection
+    await client.close();
+    await transport.close();
+    client = null;
+    transport = null;
+    
+    // Test 2: With explicit IDE parameter (should work)
+    console.log('Test 2: Testing with explicit IDE parameter...');
+    
+    client = new Client({
+      name: "test-client-ide-explicit",
+      version: "1.0.0",
+    }, {
+      capabilities: {}
+    });
+    
+    transport = new StdioClientTransport({
+      command: 'node',
+      args: [serverPath],
+      env: testEnv
+    });
+    
+    await client.connect(transport);
+    await delay(3000);
+    
     try {
       const result = await client.callTool('downloadTemplate', {
         template: 'rules',
@@ -228,20 +247,32 @@ test('downloadTemplate tool maintains backward compatibility', async () => {
       
     } catch (error) {
       // This is acceptable - the tool might fail for other reasons (like network)
-      console.log('✅ Tool call completed (may have failed for expected reasons):', error.message);
+      console.log('⚠️ Tool call completed (may have failed for expected reasons):', error.message);
     }
     
-    console.log('✅ downloadTemplate backward compatibility test passed');
+    console.log('✅ downloadTemplate IDE parameter requirement test passed');
     
   } catch (error) {
-    console.error('❌ downloadTemplate backward compatibility test failed:', error);
+    console.error('❌ downloadTemplate IDE parameter requirement test failed:', error);
     throw error;
   } finally {
     if (client) {
-      await client.close();
+      try {
+        await client.close();
+      } catch (e) {
+        // Ignore close errors
+      }
     }
     if (transport) {
-      await transport.close();
+      try {
+        await transport.close();
+      } catch (e) {
+        // Ignore close errors
+      }
+    }
+    // Restore original env
+    if (originalEnv) {
+      process.env.INTEGRATION_IDE = originalEnv;
     }
   }
-}, 90000); 
+}, 60000); 
