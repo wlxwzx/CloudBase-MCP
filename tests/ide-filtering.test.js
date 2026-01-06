@@ -143,9 +143,12 @@ test('downloadTemplate tool requires IDE parameter when not detected', async () 
 
     // Call downloadTemplate without ide parameter
     const result = await Promise.race([
-      client.callTool('downloadTemplate', {
-        template: 'rules',
-        overwrite: false
+      client.callTool({
+        name: 'downloadTemplate',
+        arguments: {
+          template: 'rules',
+          overwrite: false
+        }
       }),
       new Promise((_, reject) => 
         setTimeout(() => reject(new Error('callTool timeout after 10s')), 10000)

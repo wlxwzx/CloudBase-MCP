@@ -42,10 +42,13 @@ test('downloadTemplate tool creates filtered directory for specific IDE', async 
     
     // Test with specific IDE type to verify filtering works
     try {
-      const result = await client.callTool('downloadTemplate', {
-        template: 'rules',
-        ide: 'claude-code',
-        overwrite: false
+      const result = await client.callTool({
+        name: 'downloadTemplate',
+        arguments: {
+          template: 'rules',
+          ide: 'claude-code',
+          overwrite: false
+        }
       });
       
       // Check if the result contains filtering information
@@ -113,10 +116,13 @@ test('downloadTemplate tool maintains all files for "all" IDE type', async () =>
     console.log('Testing "all" IDE type (should not filter)...');
     
     try {
-      const result = await client.callTool('downloadTemplate', {
-        template: 'rules',
-        ide: 'all',
-        overwrite: false
+      const result = await client.callTool({
+        name: 'downloadTemplate',
+        arguments: {
+          template: 'rules',
+          ide: 'all',
+          overwrite: false
+        }
       });
       
       // Check if the result indicates no filtering
