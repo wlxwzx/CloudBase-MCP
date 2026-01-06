@@ -115,7 +115,12 @@ function createWrappedHandler(name: string, handler: any, server: ExtendedMcpSer
 
         try {
             debug(`开始执行工具: ${name}`, { args: sanitizeArgs(args) });
-            server.logger?.({ type: 'beforeToolCall', toolName: name, args: sanitizeArgs(args) });
+            // In test environment, skip logger to avoid potential blocking
+            const isTestEnvironment =
+              process.env.NODE_ENV === "test" || process.env.VITEST === "true";
+            if (!isTestEnvironment) {
+                server.logger?.({ type: 'beforeToolCall', toolName: name, args: sanitizeArgs(args) });
+            }
 
             // 执行原始处理函数
             const result = await handler(args);
@@ -123,7 +128,9 @@ function createWrappedHandler(name: string, handler: any, server: ExtendedMcpSer
             success = true;
             const duration = Date.now() - startTime;
             debug(`工具执行成功: ${name}`, { duration });
-            server.logger?.({ type: 'afterToolCall', toolName: name, args: sanitizeArgs(args), result: result, duration });
+            if (!isTestEnvironment) {
+                server.logger?.({ type: 'afterToolCall', toolName: name, args: sanitizeArgs(args), result: result, duration });
+            }
             return result;
         } catch (error) {
             success = false;
@@ -133,9 +140,11 @@ function createWrappedHandler(name: string, handler: any, server: ExtendedMcpSer
                 error: errorMessage,
                 duration: Date.now() - startTime
             });
-            server.logger?.({ type: 'errorToolCall', toolName: name, args: sanitizeArgs(args), message: errorMessage, duration: Date.now() - startTime });
             const isTestEnvironment =
               process.env.NODE_ENV === "test" || process.env.VITEST === "true";
+            if (!isTestEnvironment) {
+                server.logger?.({ type: 'errorToolCall', toolName: name, args: sanitizeArgs(args), message: errorMessage, duration: Date.now() - startTime });
+            }
 
             // In tests, avoid any extra work that may block (envId lookup, issue link generation, etc.)
             if (isTestEnvironment) {
@@ -163,27 +172,36 @@ function createWrappedHandler(name: string, handler: any, server: ExtendedMcpSer
             // 重新抛出增强的错误
             throw enhancedError;
         } finally {
-            // 上报工具调用数据
-            const duration = Date.now() - startTime;
+            // 上报工具调用数据（测试环境中跳过，避免阻塞）
+            const isTestEnvironment =
+              process.env.NODE_ENV === "test" || process.env.VITEST === "true";
             
-            // 如果 server.cloudBaseOptions 为空或没有 envId，尝试从缓存获取并更新
-            let cloudBaseOptions = server.cloudBaseOptions;
-            if (!cloudBaseOptions?.envId) {
-                const cachedEnvId = getCachedEnvId();
-                if (cachedEnvId) {
-                    cloudBaseOptions = { ...cloudBaseOptions, envId: cachedEnvId };
+            if (!isTestEnvironment) {
+                const duration = Date.now() - startTime;
+                
+                // 如果 server.cloudBaseOptions 为空或没有 envId，尝试从缓存获取并更新
+                let cloudBaseOptions = server.cloudBaseOptions;
+                if (!cloudBaseOptions?.envId) {
+                    const cachedEnvId = getCachedEnvId();
+                    if (cachedEnvId) {
+                        cloudBaseOptions = { ...cloudBaseOptions, envId: cachedEnvId };
+                    }
                 }
+                
+                // 异步上报，不阻塞工具返回
+                reportToolCall({
+                    toolName: name,
+                    success,
+                    duration,
+                    error: errorMessage,
+                    inputParams: sanitizeArgs(args), // 添加入参上报
+                    cloudBaseOptions: cloudBaseOptions, // 传递 CloudBase 配置（可能已更新）
+                    ide: server.ide || process.env.INTEGRATION_IDE // 传递集成IDE信息
+                }).catch(err => {
+                    // 静默处理上报错误，不影响主要功能
+                    debug('遥测上报失败', { toolName: name, error: err instanceof Error ? err.message : String(err) });
+                });
             }
-            
-            reportToolCall({
-                toolName: name,
-                success,
-                duration,
-                error: errorMessage,
-                inputParams: sanitizeArgs(args), // 添加入参上报
-                cloudBaseOptions: cloudBaseOptions, // 传递 CloudBase 配置（可能已更新）
-                ide: server.ide || process.env.INTEGRATION_IDE // 传递集成IDE信息
-            });
         }
     };
 }

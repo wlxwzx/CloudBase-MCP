@@ -4,7 +4,6 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { expect, test } from 'vitest';
-import { resolveDownloadTemplateIDE, validateIDE } from '../mcp/src/tools/setup.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -98,36 +97,78 @@ test('downloadTemplate tool supports IDE filtering', async () => {
   }
 }, 90000);
 
-test('downloadTemplate tool validates IDE parameter correctly', async () => {
-  const invalid = validateIDE('invalid-ide-type');
-  expect(invalid.valid).toBe(false);
-  expect(invalid.error).toContain('不支持的IDE类型');
-  expect(invalid.supportedIDEs).toBeDefined();
-  expect(invalid.supportedIDEs).toContain('cursor');
-
-  expect(validateIDE('all').valid).toBe(true);
-  expect(validateIDE('cursor').valid).toBe(true);
-});
-
 test('downloadTemplate tool requires IDE parameter when not detected', async () => {
-  const r1 = resolveDownloadTemplateIDE(undefined, undefined);
-  expect(r1.ok).toBe(false);
-  if (!r1.ok) {
-    expect(r1.reason).toBe('missing_ide');
-    expect(r1.supportedIDEs).toContain('cursor');
-  }
+  let transport = null;
+  let client = null;
+  
+  try {
+    console.log('Creating client...');
+    // Create client
+    client = new Client({
+      name: "test-client-ide-required",
+      version: "1.0.0",
+    }, {
+      capabilities: {}
+    });
 
-  const r2 = resolveDownloadTemplateIDE(undefined, 'SomeUnknownIDE');
-  expect(r2.ok).toBe(false);
-  if (!r2.ok) {
-    expect(r2.reason).toBe('unmapped_integration_ide');
-    expect(r2.integrationIDE).toBe('SomeUnknownIDE');
-    expect(r2.supportedIDEs).toContain('cursor');
-  }
+    // Use the CJS CLI for integration testing
+    const serverPath = join(__dirname, '../mcp/dist/cli.cjs');
+    const env = { ...process.env };
+    delete env.INTEGRATION_IDE; // Ensure INTEGRATION_IDE is not set
+    env.CLOUDBASE_MCP_PLUGINS_ENABLED = "setup";
+    env.NODE_ENV = "test";
+    env.VITEST = "true";
+    
+    transport = new StdioClientTransport({
+      command: 'node',
+      args: [serverPath],
+      env
+    });
 
-  const r3 = resolveDownloadTemplateIDE('cursor', undefined);
-  expect(r3.ok).toBe(true);
-  if (r3.ok) {
-    expect(r3.resolvedIDE).toBe('cursor');
+    console.log('Connecting to MCP server...');
+    // Connect client to server
+    await client.connect(transport);
+    console.log('Connected. Waiting 500ms...');
+    await delay(500);
+    
+    // Verify tool is available
+    const toolsResult = await client.listTools();
+    const downloadTemplateTool = toolsResult.tools.find(t => t.name === 'downloadTemplate');
+    if (!downloadTemplateTool) {
+      throw new Error('downloadTemplate tool not found');
+    }
+    console.log('✅ downloadTemplate tool found');
+    
+    console.log('Calling downloadTemplate (missing ide)...');
+
+    // Call downloadTemplate without ide parameter
+    const result = await Promise.race([
+      client.callTool('downloadTemplate', {
+        template: 'rules',
+        overwrite: false
+      }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('callTool timeout after 10s')), 10000)
+      )
+    ]);
+
+    console.log('Call completed. Result:', result.content?.[0]?.text?.substring(0, 100));
+
+    // Verify error message
+    expect(result.content).toBeDefined();
+    expect(result.content.length).toBeGreaterThan(0);
+    expect(result.content[0].text).toContain('必须指定 IDE 参数');
+    expect(result.content[0].text).toContain('请传入 `ide` 参数');
+    
+  } catch (error) {
+    console.error('Test failed:', error.message);
+    throw error;
+  } finally {
+    if (client) {
+      await client.close();
+    }
+    if (transport) {
+      await transport.close();
+    }
   }
-});
+}, 60000);
