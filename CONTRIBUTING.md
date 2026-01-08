@@ -85,6 +85,101 @@ npm run changelog
 
 生成的 changelog 将保存在 `CHANGELOG.md` 文件中。
 
+## Rules 管理流程
+
+项目使用硬链接机制来保持所有 AI IDE 配置文件的一致性。理解这个流程对于正确维护 rules 非常重要。
+
+### 核心原则
+
+1. **新增模块 rules**：在 `config/.claude/skills` 中创建
+2. **系统顶级 rules**：在 `config/.cursor/rules/cloudbase-rules.mdc` 中修改
+
+### 目录结构关系
+
+```
+config/
+├── .claude/
+│   └── skills/              # 源目录：新增模块 rules 在这里创建
+│       └── [module]/
+│           └── SKILL.md     # 模块规则文件
+├── .codebuddy/
+│   └── skills/              # 硬链接自 .claude/skills
+├── rules/                   # 从 .claude/skills 复制（SKILL.md -> rule.md）
+│   └── [module]/
+│       └── rule.md
+└── .cursor/
+    └── rules/
+        ├── cloudbase-rules.mdc  # 系统顶级 rules（在这里修改）
+        └── [module]/            # 硬链接自 config/rules（.md -> .mdc 转换）
+```
+
+### 同步流程
+
+运行 `npm run build:rules-sync` 或 `node scripts/fix-config-hardlinks.mjs` 会执行以下同步：
+
+1. **Skills 目录同步**（硬链接）
+   - `config/.claude/skills` → `config/.codebuddy/skills`
+   - 使用硬链接，修改任一文件会同步到另一个
+
+2. **Skills 到 Rules 同步**（复制）
+   - `config/.claude/skills` → `config/rules`
+   - 复制文件，`SKILL.md` 重命名为 `rule.md`
+   - 保持原有目录结构
+
+3. **Rules 到 IDE 目录同步**（硬链接）
+   - `config/rules` → 各 IDE 特定目录：
+     - `config/.qoder/rules`
+     - `config/.cursor/rules`（.md → .mdc 转换）
+     - `config/.agent/rules`
+     - `config/.trae/rules`
+     - `config/.windsurf/rules`
+     - `config/.clinerules`
+     - `config/.kiro/steering`
+   - 使用硬链接，Cursor 需要将 `.md` 转换为 `.mdc` 格式
+
+4. **系统顶级 Rules 同步**（硬链接）
+   - `config/.cursor/rules/cloudbase-rules.mdc` → 其他 IDE 的规则文件
+   - 使用硬链接，修改 Cursor 的文件会同步到所有其他 IDE
+
+### 如何新增模块 Rules
+
+1. **在 `config/.claude/skills` 中创建新模块**：
+   ```bash
+   config/.claude/skills/[module-name]/
+   └── SKILL.md
+   ```
+
+2. **运行同步脚本**：
+   ```bash
+   npm run build:rules-sync
+   ```
+
+3. **自动同步结果**：
+   - ✅ 自动复制到 `config/rules/[module-name]/rule.md`
+   - ✅ 自动硬链接到所有 IDE 目录
+   - ✅ Cursor 目录会自动转换为 `.mdc` 格式
+
+### 如何修改系统顶级 Rules
+
+1. **直接编辑 `config/.cursor/rules/cloudbase-rules.mdc`**
+
+2. **运行同步脚本**：
+   ```bash
+   npm run build:rules-sync
+   ```
+
+3. **自动同步结果**：
+   - ✅ 通过硬链接自动同步到所有其他 IDE 的规则文件
+   - ✅ 修改一个文件，所有文件都会更新（因为是硬链接）
+
+### 重要提示
+
+- ⚠️ **不要直接修改** `config/rules` 或其他 IDE 目录中的文件
+- ✅ **新增模块**：在 `config/.claude/skills` 中创建
+- ✅ **修改顶级规则**：在 `config/.cursor/rules/cloudbase-rules.mdc` 中修改
+- ✅ **运行同步**：修改后运行 `npm run build:rules-sync` 同步到所有位置
+- 💡 **硬链接机制**：使用硬链接确保所有 IDE 配置文件保持一致，修改一处即可同步到所有位置
+
 ## 代码风格
 
 - 遵循项目的代码风格指南
