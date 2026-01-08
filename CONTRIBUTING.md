@@ -331,8 +331,9 @@ const ideRulesConfigs = [
 5. 点击 "Run workflow" 按钮
 
 **注意事项**：
-- 由于两个仓库在同一组织下，使用默认的 `GITHUB_TOKEN` 即可访问
+- 需要配置 `CLOUDBASE_EXAMPLES_TOKEN` secret（Personal Access Token）用于访问 cloudbase-examples 仓库
 - 如果目标分支不存在，workflow 会自动创建
+- 创建 PAT 时需要勾选 `repo` 权限
 
 ## 行为准则
 

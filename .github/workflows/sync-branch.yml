@@ -31,6 +31,7 @@ jobs:
           repository: TencentCloudBase/awsome-cloudbase-examples
           ref: ${{ github.event.inputs.target_branch }}
           path: cloudbase-examples
+          token: ${{ secrets.CLOUDBASE_EXAMPLES_TOKEN }}
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -61,6 +62,8 @@ jobs:
       - name: Commit and push changes
         if: github.event.inputs.commit_changes == 'true'
         working-directory: cloudbase-examples
+        env:
+          PAT_TOKEN: ${{ secrets.CLOUDBASE_EXAMPLES_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -69,5 +72,6 @@ jobs:
             echo "No changes to commit, skipping commit and push"
           else
             git commit -m "chore: sync config from ${{ github.event.inputs.source_branch }}"
+            git remote set-url origin https://x-access-token:${PAT_TOKEN}@github.com/TencentCloudBase/awsome-cloudbase-examples.git
             git push origin ${{ github.event.inputs.target_branch }}
           fi
