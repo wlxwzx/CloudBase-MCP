@@ -172,6 +172,84 @@ config/
    - ✅ 通过硬链接自动同步到所有其他 IDE 的规则文件
    - ✅ 修改一个文件，所有文件都会更新（因为是硬链接）
 
+### 如何新增 IDE 支持
+
+当需要支持新的 AI IDE 时，需要修改 `scripts/fix-config-hardlinks.mjs` 文件中的以下配置：
+
+#### 1. 添加系统顶级 Rules 目标路径
+
+在 `RULES_TARGETS` 数组中添加新 IDE 的规则文件路径：
+
+```javascript
+const RULES_TARGETS = [
+  // ... 现有配置
+  "config/.your-ide/rules/cloudbase-rules.md",  // 新增 IDE 的规则文件路径
+];
+```
+
+**注意事项**：
+- 文件扩展名根据 IDE 要求选择（`.md`、`.mdc`、`.mdr` 等）
+- 路径格式：`config/.{ide-name}/rules/cloudbase-rules.{ext}`
+
+#### 2. 添加 IDE 特定 Rules 目录配置
+
+在 `syncRulesToIDEDirectories()` 函数的 `ideRulesConfigs` 数组中添加配置：
+
+```javascript
+const ideRulesConfigs = [
+  // ... 现有配置
+  { 
+    dir: "config/.your-ide/rules", 
+    convertMdToMdc: false  // 如果 IDE 需要 .mdc 格式，设为 true
+  },
+];
+```
+
+**配置说明**：
+- `dir`: IDE 的 rules 目录路径
+- `convertMdToMdc`: 是否需要将 `.md` 文件转换为 `.mdc` 格式（仅 Cursor 需要）
+
+#### 3. 添加 Skills 目录同步（可选）
+
+如果新 IDE 需要同步 skills 目录，修改 `syncSkillsDirectory()` 函数：
+
+```javascript
+const SKILLS_SOURCE_DIR = "config/.claude/skills";
+const SKILLS_TARGET_DIR = "config/.codebuddy/skills";
+// 如果需要同步到新 IDE，添加新的目标目录配置
+```
+
+然后在 `main()` 函数中调用同步函数。
+
+#### 4. 运行同步脚本验证
+
+修改完成后，运行同步脚本验证配置：
+
+```bash
+npm run build:rules-sync
+```
+
+**验证检查**：
+- ✅ 检查新 IDE 目录是否创建
+- ✅ 检查规则文件是否正确硬链接
+- ✅ 检查文件格式转换是否正确（如果设置了 `convertMdToMdc: true`）
+
+#### 示例：添加新 IDE "MyIDE"
+
+```javascript
+// 1. 在 RULES_TARGETS 中添加
+const RULES_TARGETS = [
+  // ... 现有配置
+  "config/.myide/rules/cloudbase-rules.md",
+];
+
+// 2. 在 ideRulesConfigs 中添加
+const ideRulesConfigs = [
+  // ... 现有配置
+  { dir: "config/.myide/rules", convertMdToMdc: false },
+];
+```
+
 ### 重要提示
 
 - ⚠️ **不要直接修改** `config/rules` 或其他 IDE 目录中的文件
@@ -179,6 +257,7 @@ config/
 - ✅ **修改顶级规则**：在 `config/.cursor/rules/cloudbase-rules.mdc` 中修改
 - ✅ **运行同步**：修改后运行 `npm run build:rules-sync` 同步到所有位置
 - 💡 **硬链接机制**：使用硬链接确保所有 IDE 配置文件保持一致，修改一处即可同步到所有位置
+- 🔧 **新增 IDE**：修改 `fix-config-hardlinks.mjs` 中的配置数组，然后运行同步脚本
 
 ## 代码风格
 
